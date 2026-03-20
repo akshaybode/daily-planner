@@ -1,0 +1,226 @@
+"use client";
+
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import {
+  CalendarCheck,
+  Flame,
+  BarChart3,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react";
+
+export default function LoginPage() {
+  const { login, signup } = useAuth();
+  const router = useRouter();
+  const [isSignup, setIsSignup] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      if (isSignup) {
+        if (!name.trim()) { setError("Name is required"); setIsSubmitting(false); return; }
+        await signup(email, password, name);
+      } else {
+        await login(email, password);
+      }
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setIsSubmitting(false);
+    }
+  };
+
+  const features = [
+    { icon: CalendarCheck, title: "Daily Planning", desc: "Organize tasks day by day" },
+    { icon: Flame, title: "Streak Tracking", desc: "Build consistency habits" },
+    { icon: BarChart3, title: "Progress Reports", desc: "Weekly insights & analytics" },
+  ];
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Left panel - branding */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl" />
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-brand-400 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/3 w-48 h-48 bg-brand-300 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative z-10 flex flex-col justify-center px-16 text-white">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <h1 className="text-3xl font-bold">PlanFlow</h1>
+          </div>
+
+          <h2 className="text-5xl font-extrabold leading-tight mb-6">
+            Plan your days.
+            <br />
+            <span className="text-brand-200">Track your growth.</span>
+          </h2>
+
+          <p className="text-lg text-brand-100 mb-12 max-w-md">
+            Stay on top of your goals with daily planning, streak tracking,
+            and beautiful progress visualization.
+          </p>
+
+          <div className="space-y-6">
+            {features.map((f) => (
+              <div key={f.title} className="flex items-center gap-4">
+                <div className="w-11 h-11 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
+                  <f.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">{f.title}</h3>
+                  <p className="text-sm text-brand-200">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel - form */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
+        <div className="w-full max-w-md">
+          {/* Mobile branding */}
+          <div className="lg:hidden flex items-center gap-3 mb-10">
+            <div className="w-11 h-11 bg-brand-500 rounded-2xl flex items-center justify-center">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-gradient">PlanFlow</h1>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold mb-2">
+              {isSignup ? "Create account" : "Welcome back"}
+            </h2>
+            <p className="text-surface-500">
+              {isSignup
+                ? "Start your productivity journey today"
+                : "Sign in to continue planning your success"}
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm animate-scale-in">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {isSignup && (
+              <div className="animate-slide-up">
+                <label className="block text-sm font-medium mb-2 text-surface-700 dark:text-surface-300">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="input-field"
+                  placeholder="John Doe"
+                  required={isSignup}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-surface-700 dark:text-surface-300">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input-field"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-surface-700 dark:text-surface-300">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pr-12"
+                  placeholder="Enter your password"
+                  required
+                  minLength={4}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary w-full py-3.5 text-base"
+            >
+              {isSubmitting ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  {isSignup ? "Create Account" : "Sign In"}
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 text-center">
+            <p className="text-surface-500">
+              {isSignup ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button
+                onClick={() => { setIsSignup(!isSignup); setError(""); }}
+                className="text-brand-500 hover:text-brand-600 font-semibold transition-colors"
+              >
+                {isSignup ? "Sign in" : "Sign up"}
+              </button>
+            </p>
+          </div>
+
+          {!isSignup && (
+            <div className="mt-10 p-4 bg-brand-50 dark:bg-brand-950/30 border border-brand-100 dark:border-brand-900 rounded-xl">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-brand-500 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-surface-600 dark:text-surface-400">
+                  <p className="font-medium text-surface-800 dark:text-surface-200 mb-1">
+                    30-day sessions
+                  </p>
+                  <p>Your session stays active for 30 days. No need to log in every time.</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
