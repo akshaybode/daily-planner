@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !user) router.replace("/login");
+    if (!isLoading && !user) router.replace("/");
   }, [user, isLoading, router]);
 
   const refresh = useCallback(() => {
