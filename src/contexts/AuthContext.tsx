@@ -23,25 +23,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadProfile = useCallback(async (authUserId: string) => {
-    let retries = 0;
-    let profile: User | null = null;
-
-    // Retry a few times — the DB trigger that creates the profile runs async
-    while (!profile && retries < 5) {
-      profile = await store.getProfile(authUserId);
-      if (!profile) {
-        retries++;
-        await new Promise((r) => setTimeout(r, 500 * retries));
+  const loadProfile = useCallback(async (authUserId: string, isNewSignup = false) => {
+    if (isNewSignup) {
+      let retries = 0;
+      let profile: User | null = null;
+      while (!profile && retries < 5) {
+        profile = await store.getProfile(authUserId);
+        if (!profile) {
+          retries++;
+          await new Promise((r) => setTimeout(r, 400 * retries));
+        }
       }
+      setUser(profile);
+      return;
     }
+
+    const profile = await store.getProfile(authUserId);
     setUser(profile);
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       if (session?.user) {
-        loadProfile(session.user.id).finally(() => setIsLoading(false));
+        loadProfile(session.user.id).finally(() => { if (mounted) setIsLoading(false); });
       } else {
         setIsLoading(false);
       }
@@ -49,18 +56,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
         if (session?.user) {
-          await loadProfile(session.user.id);
+          const isNew = event === "SIGNED_UP";
+          await loadProfile(session.user.id, isNew);
         } else {
           setUser(null);
         }
-        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {

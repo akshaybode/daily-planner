@@ -60,6 +60,7 @@ export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [xpToast, setXpToast] = useState<{ amount: number; visible: boolean }>({ amount: 0, visible: false });
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/login");
@@ -70,33 +71,34 @@ export default function DashboardPage() {
     refreshUser();
   }, [refreshUser]);
 
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const [t, c] = await Promise.all([store.getTasks(user.id), store.getCategories(user.id)]);
-      setTasks(t); setCategories(c);
-    };
-    load();
-  }, [user, refreshKey]);
-
-  useEffect(() => {
-    if (!user) return;
-    store.getStreak(user.id).then(setStreak);
-  }, [user, refreshKey]);
-
-  useEffect(() => {
-    if (!user) return;
-    store.getHeatmapData(user.id, heatmapYear).then(setHeatmapData);
-  }, [user, heatmapYear, refreshKey]);
-
   const reportWeekStart = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() + reportWeekOffset * 7); return d;
   }, [reportWeekOffset]);
 
   useEffect(() => {
     if (!user) return;
-    store.getWeeklyReport(user.id, reportWeekStart).then(setWeeklyReport);
-  }, [user, reportWeekStart, refreshKey]);
+    let cancelled = false;
+
+    const loadAll = async () => {
+      const [t, c, s, h, r] = await Promise.all([
+        store.getTasks(user.id),
+        store.getCategories(user.id),
+        store.getStreak(user.id),
+        store.getHeatmapData(user.id, heatmapYear),
+        store.getWeeklyReport(user.id, reportWeekStart),
+      ]);
+      if (cancelled) return;
+      setTasks(t);
+      setCategories(c);
+      setStreak(s);
+      setHeatmapData(h);
+      setWeeklyReport(r);
+      setDataReady(true);
+    };
+    loadAll();
+
+    return () => { cancelled = true; };
+  }, [user, refreshKey, heatmapYear, reportWeekStart]);
 
   const todayStr = formatDate(new Date());
   const todayTasks = useMemo(() => tasks.filter((t) => t.date === selectedDate).sort((a, b) => a.sortOrder - b.sortOrder), [tasks, selectedDate]);
@@ -183,7 +185,14 @@ export default function DashboardPage() {
   const openCreateModal = () => { setEditingTask(null); setIsModalOpen(true); };
 
   if (isLoading || !user) {
-    return (<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-3 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" /></div>);
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950">
+        <div className="text-center">
+          <div className="w-10 h-10 mx-auto mb-4 border-3 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
+          <p className="text-sm text-surface-500">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   if (isZenMode) {
@@ -205,6 +214,11 @@ export default function DashboardPage() {
         onChangePassword={() => setIsChangePasswordOpen(true)} />
 
       <main className="flex-1 min-w-0 pb-20 lg:pb-0">
+        {!dataReady && (
+          <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-surface-200 dark:bg-surface-800 overflow-hidden">
+            <div className="h-full w-1/3 bg-brand-500 rounded-full animate-shimmer" style={{ animation: "shimmer 1.2s ease-in-out infinite" }} />
+          </div>
+        )}
         <header className="sticky top-0 z-30 bg-white/80 dark:bg-surface-950/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-800">
           <div className="flex items-center justify-between px-4 lg:px-8 py-4">
             <div className="flex items-center gap-3">

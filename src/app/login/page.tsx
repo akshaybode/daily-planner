@@ -38,7 +38,7 @@ export default function LoginPage() {
         return;
       }
       await login(email, password);
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setIsSubmitting(false);
