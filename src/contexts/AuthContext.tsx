@@ -13,6 +13,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (user: User) => Promise<void>;
   refreshUser: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,7 +24,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadProfile = useCallback(async (authUserId: string) => {
-    const profile = await store.getProfile(authUserId);
+    let retries = 0;
+    let profile: User | null = null;
+
+    // Retry a few times — the DB trigger that creates the profile runs async
+    while (!profile && retries < 5) {
+      profile = await store.getProfile(authUserId);
+      if (!profile) {
+        retries++;
+        await new Promise((r) => setTimeout(r, 500 * retries));
+      }
+    }
     setUser(profile);
   }, []);
 
@@ -36,11 +48,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (session?.user) {
           await loadProfile(session.user.id);
         } else {
           setUser(null);
+        }
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+          setIsLoading(false);
         }
       }
     );
@@ -76,8 +91,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await loadProfile(user.id);
   }, [user, loadProfile]);
 
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  const updatePassword = useCallback(async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, updateUser, refreshUser }}>
+    <AuthContext.Provider value={{
+      user, isLoading, login, signup, logout,
+      updateUser, refreshUser, resetPassword, updatePassword,
+    }}>
       {children}
     </AuthContext.Provider>
   );

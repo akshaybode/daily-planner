@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Task, Category, TaskLink, SubTask, Priority } from "@/lib/types";
+import { Task, Category, TaskLink, SubTask, Priority, Difficulty } from "@/lib/types";
 import { generateId, detectLinkType, getLinkColor } from "@/lib/utils";
 import {
   X,
@@ -56,6 +56,8 @@ export default function TaskModal({
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkTitle, setNewLinkTitle] = useState("");
   const [newSubTask, setNewSubTask] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty>(1);
+  const [estimatedMinutes, setEstimatedMinutes] = useState(30);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceDays, setRecurrenceDays] = useState<string[]>([]);
   const [showLinkInput, setShowLinkInput] = useState(false);
@@ -69,6 +71,8 @@ export default function TaskModal({
       setCategoryId(task.categoryId);
       setLinks(task.links);
       setSubTasks(task.subTasks);
+      setDifficulty(task.difficulty ?? 1);
+      setEstimatedMinutes(task.estimatedMinutes ?? 30);
       setIsRecurring(task.isRecurring);
       setRecurrenceDays(task.recurrenceDays);
     } else {
@@ -79,6 +83,8 @@ export default function TaskModal({
       setCategoryId(categories[0]?.id || "");
       setLinks([]);
       setSubTasks([]);
+      setDifficulty(1);
+      setEstimatedMinutes(30);
       setIsRecurring(false);
       setRecurrenceDays([]);
     }
@@ -95,6 +101,8 @@ export default function TaskModal({
       description: description.trim(),
       date,
       priority,
+      difficulty,
+      estimatedMinutes,
       categoryId,
       links,
       subTasks,
@@ -218,6 +226,45 @@ export default function TaskModal({
                     }`}
                   >
                     {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Difficulty & Time estimate */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-surface-500 mb-1.5">
+                Difficulty
+              </label>
+              <div className="flex gap-1.5">
+                {([1, 2, 3] as Difficulty[]).map((d) => (
+                  <button key={d} onClick={() => setDifficulty(d)}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      difficulty === d
+                        ? d === 3 ? "bg-red-500 text-white shadow-md" : d === 2 ? "bg-amber-500 text-white shadow-md" : "bg-emerald-500 text-white shadow-md"
+                        : "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400"
+                    }`}>
+                    {d === 1 ? "Easy" : d === 2 ? "Medium" : "Hard"}
+                    <span className="block text-[10px] opacity-70">{d === 1 ? "10 XP" : d === 2 ? "25 XP" : "50 XP"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-500 mb-1.5">
+                Time Estimate
+              </label>
+              <div className="flex gap-1.5">
+                {[15, 30, 60, 90].map((m) => (
+                  <button key={m} onClick={() => setEstimatedMinutes(m)}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                      estimatedMinutes === m
+                        ? "bg-brand-500 text-white shadow-md"
+                        : "bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400"
+                    }`}>
+                    {m}m
                   </button>
                 ))}
               </div>

@@ -3,16 +3,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { Task, Category, WeeklyReport as WeeklyReportType, HeatmapDay } from "@/lib/types";
+import { Task, Category, WeeklyReport as WeeklyReportType, HeatmapDay, TaskTemplate } from "@/lib/types";
 import * as store from "@/lib/store";
 import {
-  formatDate,
-  getWeekDates,
-  getMonthDates,
-  isToday,
-  getDayName,
-  getMonthName,
-  cn,
+  formatDate, getWeekDates, getMonthDates, isToday, getDayName, getMonthName, cn,
 } from "@/lib/utils";
 import Sidebar, { ViewType } from "@/components/layout/Sidebar";
 import BottomNav from "@/components/layout/BottomNav";
@@ -22,20 +16,17 @@ import Heatmap from "@/components/heatmap/Heatmap";
 import WeeklyReportView from "@/components/reports/WeeklyReport";
 import InsightsView from "@/components/reports/InsightsView";
 import ShareProfileModal from "@/components/layout/ShareProfileModal";
+import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
 import DailyQuote from "@/components/layout/DailyQuote";
+import XpBar from "@/components/gamification/XpBar";
+import AchievementBadges from "@/components/gamification/AchievementBadges";
+import PomodoroTimer from "@/components/pomodoro/PomodoroTimer";
+import ZenMode from "@/components/focus/ZenMode";
+import RadarChart from "@/components/charts/RadarChart";
+import TemplateLibrary from "@/components/templates/TemplateLibrary";
 import {
-  Plus,
-  Flame,
-  Target,
-  CheckCircle2,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  Sparkles,
-  Sun,
-  Moon,
-  CloudSun,
+  Plus, Flame, Target, CheckCircle2, TrendingUp, ChevronLeft, ChevronRight,
+  Menu, Sparkles, Sun, Moon, CloudSun, Zap, Shield,
 } from "lucide-react";
 
 function getGreeting(): { text: string; icon: React.ElementType } {
@@ -46,7 +37,7 @@ function getGreeting(): { text: string; icon: React.ElementType } {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
   const router = useRouter();
 
   const [currentView, setCurrentView] = useState<ViewType>("dashboard");
@@ -65,45 +56,41 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [xpToast, setXpToast] = useState<{ amount: number; visible: boolean }>({ amount: 0, visible: false });
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/login");
   }, [user, isLoading, router]);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const refresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    refreshUser();
+  }, [refreshUser]);
 
-  // Load tasks and categories
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const [t, c] = await Promise.all([
-        store.getTasks(user.id),
-        store.getCategories(user.id),
-      ]);
-      setTasks(t);
-      setCategories(c);
+      const [t, c] = await Promise.all([store.getTasks(user.id), store.getCategories(user.id)]);
+      setTasks(t); setCategories(c);
     };
     load();
   }, [user, refreshKey]);
 
-  // Load streak
   useEffect(() => {
     if (!user) return;
     store.getStreak(user.id).then(setStreak);
   }, [user, refreshKey]);
 
-  // Load heatmap data
   useEffect(() => {
     if (!user) return;
     store.getHeatmapData(user.id, heatmapYear).then(setHeatmapData);
   }, [user, heatmapYear, refreshKey]);
 
-  // Load weekly report
   const reportWeekStart = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + reportWeekOffset * 7);
-    return d;
+    const d = new Date(); d.setDate(d.getDate() + reportWeekOffset * 7); return d;
   }, [reportWeekOffset]);
 
   useEffect(() => {
@@ -112,51 +99,32 @@ export default function DashboardPage() {
   }, [user, reportWeekStart, refreshKey]);
 
   const todayStr = formatDate(new Date());
-
-  const todayTasks = useMemo(
-    () => tasks.filter((t) => t.date === selectedDate).sort((a, b) => a.sortOrder - b.sortOrder),
-    [tasks, selectedDate]
-  );
-
+  const todayTasks = useMemo(() => tasks.filter((t) => t.date === selectedDate).sort((a, b) => a.sortOrder - b.sortOrder), [tasks, selectedDate]);
   const todayStats = useMemo(() => {
     const total = todayTasks.length;
     const completed = todayTasks.filter((t) => t.isCompleted).length;
     return { total, completed, rate: total > 0 ? completed / total : 0 };
   }, [todayTasks]);
 
-  const weekDates = useMemo(() => {
-    const base = new Date();
-    base.setDate(base.getDate() + weekOffset * 7);
-    return getWeekDates(base);
-  }, [weekOffset]);
-
-  const monthDates = useMemo(
-    () => getMonthDates(monthDate.getFullYear(), monthDate.getMonth()),
-    [monthDate]
-  );
-
+  const weekDates = useMemo(() => { const b = new Date(); b.setDate(b.getDate() + weekOffset * 7); return getWeekDates(b); }, [weekOffset]);
+  const monthDates = useMemo(() => getMonthDates(monthDate.getFullYear(), monthDate.getMonth()), [monthDate]);
   const getCategoryById = (id: string) => categories.find((c) => c.id === id);
 
-  // ─── Task CRUD (async) ───
+  const showXpToast = (amount: number) => {
+    setXpToast({ amount, visible: true });
+    setTimeout(() => setXpToast((p) => ({ ...p, visible: false })), 2000);
+  };
 
   const handleCreateTask = async (data: Partial<Task>) => {
     if (!user) return;
     const task: Task = {
-      id: "",
-      userId: user.id,
-      title: data.title || "",
-      description: data.description || "",
-      date: data.date || selectedDate,
-      priority: data.priority || "medium",
-      categoryId: data.categoryId || categories[0]?.id || "",
-      isCompleted: false,
-      completedAt: null,
-      links: data.links || [],
-      subTasks: data.subTasks || [],
-      isRecurring: data.isRecurring || false,
-      recurrenceDays: data.recurrenceDays || [],
-      sortOrder: todayTasks.length,
-      createdAt: new Date().toISOString(),
+      id: "", userId: user.id, title: data.title || "", description: data.description || "",
+      date: data.date || selectedDate, priority: data.priority || "medium",
+      difficulty: data.difficulty || 1, categoryId: data.categoryId || categories[0]?.id || "",
+      isCompleted: false, completedAt: null, estimatedMinutes: data.estimatedMinutes || 30,
+      actualMinutes: 0, links: data.links || [], subTasks: data.subTasks || [],
+      isRecurring: data.isRecurring || false, recurrenceDays: data.recurrenceDays || [],
+      sortOrder: todayTasks.length, createdAt: new Date().toISOString(),
     };
     await store.addTask(task);
     refresh();
@@ -164,117 +132,128 @@ export default function DashboardPage() {
 
   const handleUpdateTask = async (data: Partial<Task>) => {
     if (!editingTask) return;
-    const updated = { ...editingTask, ...data };
-    await store.updateTask(updated);
+    await store.updateTask({ ...editingTask, ...data });
     setEditingTask(null);
     refresh();
   };
 
   const handleToggle = async (id: string) => {
-    await store.toggleTaskComplete(id);
+    if (!user) return;
+    const task = tasks.find((t) => t.id === id);
+    const wasCompleted = task?.isCompleted;
+    await store.toggleTaskComplete(id, user.id);
+    if (task && !wasCompleted) {
+      const xpAmount = { 1: 10, 2: 25, 3: 50 }[task.difficulty] || 10;
+      showXpToast(xpAmount);
+      store.checkAndUnlockAchievements(user.id);
+    }
     refresh();
   };
 
-  const handleDelete = async (id: string) => {
-    await store.deleteTask(id);
-    refresh();
-  };
+  const handleDelete = async (id: string) => { await store.deleteTask(id); refresh(); };
 
   const handleToggleSubTask = async (taskId: string, subTaskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    const st = task.subTasks.find((s) => s.id === subTaskId);
+    const st = task?.subTasks.find((s) => s.id === subTaskId);
     if (!st) return;
     await store.updateSubTask(taskId, subTaskId, !st.isCompleted);
     refresh();
   };
 
-  const openEditModal = (task: Task) => {
-    setEditingTask(task);
-    setIsModalOpen(true);
+  const handleApplyTemplate = async (template: TaskTemplate) => {
+    if (!user) return;
+    for (const tt of template.templateTasks) {
+      const matchedCat = categories.find((c) => c.name.toLowerCase() === tt.categoryHint.toLowerCase());
+      const task: Task = {
+        id: "", userId: user.id, title: tt.title, description: "",
+        date: selectedDate, priority: tt.priority, difficulty: tt.difficulty,
+        categoryId: matchedCat?.id || categories[0]?.id || "",
+        isCompleted: false, completedAt: null, estimatedMinutes: tt.estimatedMinutes,
+        actualMinutes: 0, links: [], subTasks: [],
+        isRecurring: false, recurrenceDays: [],
+        sortOrder: 0, createdAt: new Date().toISOString(),
+      };
+      await store.addTask(task);
+    }
+    refresh();
+    setCurrentView("dashboard");
   };
 
-  const openCreateModal = () => {
-    setEditingTask(null);
-    setIsModalOpen(true);
-  };
+  const openEditModal = (task: Task) => { setEditingTask(task); setIsModalOpen(true); };
+  const openCreateModal = () => { setEditingTask(null); setIsModalOpen(true); };
 
   if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-      </div>
-    );
+    return (<div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-3 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" /></div>);
+  }
+
+  if (isZenMode) {
+    return (<ZenMode tasks={todayTasks} categories={categories} onToggleTask={handleToggle} onClose={() => setIsZenMode(false)} />);
   }
 
   const greeting = getGreeting();
-
   const getTaskCountForDate = (date: Date) => {
     const dateStr = formatDate(date);
     const dayTasks = tasks.filter((t) => t.date === dateStr);
-    const completed = dayTasks.filter((t) => t.isCompleted).length;
-    return { total: dayTasks.length, completed };
+    return { total: dayTasks.length, completed: dayTasks.filter((t) => t.isCompleted).length };
   };
 
   return (
     <div className="min-h-screen flex">
-      <Sidebar
-        currentView={currentView}
-        onViewChange={setCurrentView}
-        isMobileOpen={isMobileSidebarOpen}
-        onMobileClose={() => setIsMobileSidebarOpen(false)}
-        onShareProfile={() => setIsShareModalOpen(true)}
-      />
+      <Sidebar currentView={currentView} onViewChange={setCurrentView}
+        isMobileOpen={isMobileSidebarOpen} onMobileClose={() => setIsMobileSidebarOpen(false)}
+        onShareProfile={() => setIsShareModalOpen(true)} onZenMode={() => setIsZenMode(true)}
+        onChangePassword={() => setIsChangePasswordOpen(true)} />
 
       <main className="flex-1 min-w-0 pb-20 lg:pb-0">
         <header className="sticky top-0 z-30 bg-white/80 dark:bg-surface-950/80 backdrop-blur-xl border-b border-surface-200 dark:border-surface-800">
           <div className="flex items-center justify-between px-4 lg:px-8 py-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => setIsMobileSidebarOpen(true)} className="btn-ghost p-2 lg:hidden">
-                <Menu className="w-5 h-5" />
-              </button>
+              <button onClick={() => setIsMobileSidebarOpen(true)} className="btn-ghost p-2 lg:hidden"><Menu className="w-5 h-5" /></button>
               <div>
                 <div className="flex items-center gap-2">
                   <greeting.icon className="w-5 h-5 text-amber-500" />
-                  <h1 className="text-lg font-bold">
-                    {greeting.text}, {user.name.split(" ")[0]}
-                  </h1>
+                  <h1 className="text-lg font-bold">{greeting.text}, {user.name.split(" ")[0]}</h1>
                 </div>
-                <p className="text-sm text-surface-500 mt-0.5">
-                  {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-                </p>
+                <p className="text-sm text-surface-500 mt-0.5">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
               </div>
             </div>
-            <button onClick={openCreateModal} className="btn-primary">
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Task</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Lv.{user.level}</span>
+                <span className="text-xs text-amber-500/70">{user.xp} XP</span>
+              </div>
+              <button onClick={openCreateModal} className="btn-primary"><Plus className="w-4 h-4" /><span className="hidden sm:inline">Add Task</span></button>
+            </div>
           </div>
         </header>
 
+        {/* XP Toast */}
+        {xpToast.visible && (
+          <div className="fixed top-20 right-6 z-50 animate-in">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl shadow-xl shadow-amber-500/25">
+              <Zap className="w-4 h-4" />
+              <span className="font-bold">+{xpToast.amount} XP</span>
+            </div>
+          </div>
+        )}
+
         <div className="px-4 lg:px-8 py-6">
-          {/* ─── Dashboard View ─── */}
+          {/* ─── Dashboard ─── */}
           {currentView === "dashboard" && (
             <div className="space-y-6 animate-in">
               <DailyQuote />
+              <XpBar xp={user.xp} level={user.level} streakFreezes={user.streakFreezes} />
+
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="stat-card">
-                  <div className="flex items-center gap-2 text-surface-500 text-sm"><Target className="w-4 h-4" />Today&apos;s Tasks</div>
-                  <p className="text-3xl font-bold mt-1">{todayStats.total}</p>
-                </div>
-                <div className="stat-card">
-                  <div className="flex items-center gap-2 text-surface-500 text-sm"><CheckCircle2 className="w-4 h-4 text-emerald-500" />Completed</div>
-                  <p className="text-3xl font-bold mt-1 text-emerald-600 dark:text-emerald-400">{todayStats.completed}</p>
-                </div>
-                <div className="stat-card">
-                  <div className="flex items-center gap-2 text-surface-500 text-sm"><TrendingUp className="w-4 h-4 text-brand-500" />Progress</div>
-                  <div className="mt-2">
-                    <div className="progress-bar"><div className="progress-bar-fill" style={{ width: `${todayStats.rate * 100}%` }} /></div>
-                    <p className="text-sm font-bold mt-1 text-gradient">{Math.round(todayStats.rate * 100)}%</p>
-                  </div>
-                </div>
+                <div className="stat-card"><div className="flex items-center gap-2 text-surface-500 text-sm"><Target className="w-4 h-4" />Today&apos;s Tasks</div><p className="text-3xl font-bold mt-1">{todayStats.total}</p></div>
+                <div className="stat-card"><div className="flex items-center gap-2 text-surface-500 text-sm"><CheckCircle2 className="w-4 h-4 text-emerald-500" />Completed</div><p className="text-3xl font-bold mt-1 text-emerald-600 dark:text-emerald-400">{todayStats.completed}</p></div>
+                <div className="stat-card"><div className="flex items-center gap-2 text-surface-500 text-sm"><TrendingUp className="w-4 h-4 text-brand-500" />Progress</div><div className="mt-2"><div className="progress-bar"><div className="progress-bar-fill" style={{ width: `${todayStats.rate * 100}%` }} /></div><p className="text-sm font-bold mt-1 text-gradient">{Math.round(todayStats.rate * 100)}%</p></div></div>
                 <div className="stat-card bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20">
-                  <div className="flex items-center gap-2 text-surface-500 text-sm"><Flame className="w-4 h-4 text-orange-500" />Streak</div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-surface-500 text-sm"><Flame className="w-4 h-4 text-orange-500" />Streak</div>
+                    {user.streakFreezes > 0 && <div className="flex items-center gap-1"><Shield className="w-3 h-3 text-blue-500" /><span className="text-[10px] font-bold text-blue-500">{user.streakFreezes}</span></div>}
+                  </div>
                   <p className="text-3xl font-bold mt-1 text-orange-500">{streak}<span className="text-base font-normal text-surface-400 ml-1">days</span></p>
                 </div>
               </div>
@@ -282,8 +261,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 overflow-x-auto pb-2">
                 {Array.from({ length: 7 }, (_, i) => {
                   const d = new Date(); d.setDate(d.getDate() - 3 + i);
-                  const dateStr = formatDate(d);
-                  const isSel = dateStr === selectedDate;
+                  const dateStr = formatDate(d); const isSel = dateStr === selectedDate;
                   const dayInfo = getTaskCountForDate(d);
                   return (
                     <button key={dateStr} onClick={() => setSelectedDate(dateStr)} className={cn("flex flex-col items-center min-w-[56px] px-3 py-3 rounded-xl transition-all", isSel ? "bg-brand-500 text-white shadow-lg shadow-brand-500/25" : "hover:bg-surface-100 dark:hover:bg-surface-800")}>
@@ -297,17 +275,18 @@ export default function DashboardPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold">
-                    {selectedDate === todayStr ? "Today's Tasks" : `Tasks for ${new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
-                  </h2>
+                  <h2 className="text-lg font-bold">{selectedDate === todayStr ? "Today's Tasks" : `Tasks for ${new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</h2>
                   <span className="text-sm text-surface-400">{todayTasks.length} task{todayTasks.length !== 1 ? "s" : ""}</span>
                 </div>
                 {todayTasks.length === 0 ? (
                   <div className="glass-card p-12 text-center">
                     <div className="w-16 h-16 bg-brand-50 dark:bg-brand-950/30 rounded-2xl flex items-center justify-center mx-auto mb-4"><Sparkles className="w-8 h-8 text-brand-500" /></div>
                     <h3 className="text-lg font-bold mb-2">No tasks yet</h3>
-                    <p className="text-surface-500 mb-6 max-w-sm mx-auto">Start planning your day by adding your first task. Stay focused and productive!</p>
-                    <button onClick={openCreateModal} className="btn-primary"><Plus className="w-4 h-4" />Add First Task</button>
+                    <p className="text-surface-500 mb-6 max-w-sm mx-auto">Start planning your day by adding tasks or using a template.</p>
+                    <div className="flex gap-3 justify-center">
+                      <button onClick={openCreateModal} className="btn-primary"><Plus className="w-4 h-4" />Add Task</button>
+                      <button onClick={() => setCurrentView("templates")} className="btn-secondary">Use Template</button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -342,10 +321,7 @@ export default function DashboardPage() {
                   return (
                     <div key={dateStr} className={cn("glass-card p-4 flex flex-col", isCurrentDay && "ring-2 ring-brand-500 ring-offset-2 dark:ring-offset-surface-950")}>
                       <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <p className={cn("text-xs font-medium uppercase", isCurrentDay ? "text-brand-500" : "text-surface-400")}>{getDayName(d)}</p>
-                          <p className="text-lg font-bold">{d.getDate()}</p>
-                        </div>
+                        <div><p className={cn("text-xs font-medium uppercase", isCurrentDay ? "text-brand-500" : "text-surface-400")}>{getDayName(d)}</p><p className="text-lg font-bold">{d.getDate()}</p></div>
                         {dayTasks.length > 0 && (<div className={cn("text-xs font-semibold px-2 py-1 rounded-full", completed === dayTasks.length ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-surface-100 text-surface-500 dark:bg-surface-800")}>{completed}/{dayTasks.length}</div>)}
                       </div>
                       <div className="space-y-1.5 flex-1 min-h-[60px]">
@@ -382,10 +358,8 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-7">
                   {monthDates.map((d, i) => {
                     if (!d) return <div key={`empty-${i}`} className="min-h-[100px] lg:min-h-[120px] border-b border-r border-surface-100 dark:border-surface-800/50" />;
-                    const dateStr = formatDate(d);
-                    const dayInfo = getTaskCountForDate(d);
-                    const isCurrentDay = isToday(d);
-                    const allDone = dayInfo.total > 0 && dayInfo.completed === dayInfo.total;
+                    const dateStr = formatDate(d); const dayInfo = getTaskCountForDate(d);
+                    const isCurrentDay = isToday(d); const allDone = dayInfo.total > 0 && dayInfo.completed === dayInfo.total;
                     const dayTasks = tasks.filter((t) => t.date === dateStr);
                     return (
                       <button key={dateStr} onClick={() => { setSelectedDate(dateStr); setCurrentView("dashboard"); }} className={cn("min-h-[100px] lg:min-h-[120px] p-2 border-b border-r border-surface-100 dark:border-surface-800/50 text-left hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors", isCurrentDay && "bg-brand-50/50 dark:bg-brand-950/20")}>
@@ -405,15 +379,42 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ─── Reports View ─── */}
-          {currentView === "report" && weeklyReport && (
-            <WeeklyReportView report={weeklyReport} onPrevWeek={() => setReportWeekOffset((w) => w - 1)} onNextWeek={() => setReportWeekOffset((w) => w + 1)} canGoNext={reportWeekOffset < 0} />
+          {/* ─── Pomodoro ─── */}
+          {currentView === "pomodoro" && (
+            <PomodoroTimer userId={user.id} tasks={todayTasks} onComplete={refresh} />
           )}
 
-          {/* ─── AI Insights View ─── */}
-          {currentView === "insights" && user && <InsightsView userId={user.id} />}
+          {/* ─── Reports ─── */}
+          {currentView === "report" && weeklyReport && (
+            <div className="space-y-6 animate-in">
+              <WeeklyReportView report={weeklyReport} onPrevWeek={() => setReportWeekOffset((w) => w - 1)} onNextWeek={() => setReportWeekOffset((w) => w + 1)} canGoNext={reportWeekOffset < 0} />
+              {weeklyReport.radar && (
+                <div className="glass-card p-6">
+                  <h3 className="text-lg font-bold mb-4">Productivity Radar</h3>
+                  <div className="flex justify-center">
+                    <RadarChart data={weeklyReport.radar} />
+                  </div>
+                </div>
+              )}
+              <div className="glass-card p-4 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10">
+                <Zap className="w-5 h-5 text-amber-500" />
+                <span className="text-sm"><strong>{weeklyReport.xpEarned} XP</strong> earned this week</span>
+              </div>
+            </div>
+          )}
 
-          {/* ─── Heatmap View ─── */}
+          {/* ─── AI Insights ─── */}
+          {currentView === "insights" && <InsightsView userId={user.id} />}
+
+          {/* ─── Achievements ─── */}
+          {currentView === "achievements" && <AchievementBadges userId={user.id} />}
+
+          {/* ─── Templates ─── */}
+          {currentView === "templates" && (
+            <TemplateLibrary userId={user.id} categories={categories} onApplyTemplate={handleApplyTemplate} />
+          )}
+
+          {/* ─── Heatmap ─── */}
           {currentView === "heatmap" && (
             <div className="space-y-6 animate-in">
               <div><h2 className="text-2xl font-bold">Year in Review</h2><p className="text-surface-500 mt-1">Your task completion visualized like GitHub contributions</p></div>
@@ -432,6 +433,7 @@ export default function DashboardPage() {
       <BottomNav currentView={currentView} onViewChange={setCurrentView} />
       <TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingTask(null); }} onSave={editingTask ? handleUpdateTask : handleCreateTask} task={editingTask} categories={categories} defaultDate={selectedDate} />
       <ShareProfileModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
+      <ChangePasswordModal open={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
     </div>
   );
 }

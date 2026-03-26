@@ -206,3 +206,27 @@
     }
   }
 }
+
+/* ─── Theme overrides ─── */
+
+html.theme-solarized {
+  --tw-bg-surface-50: #fdf6e3;
+  --tw-bg-surface-950: #002b36;
+}
+html.theme-solarized body {
+  background-color: #fdf6e3;
+  color: #586e75;
+}
+html.theme-solarized.dark body {
+  background-color: #002b36;
+  color: #93a1a1;
+}
+
+html.theme-github body {
+  background-color: #f6f8fa;
+  color: #1f2328;
+}
+html.theme-github.dark body {
+  background-color: #0d1117;
+  color: #e6edf3;
+}
